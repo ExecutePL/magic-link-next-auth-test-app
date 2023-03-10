@@ -7,28 +7,26 @@ import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "../../../server/db";
 import CredentialsProvider from "next-auth/providers/credentials";
-// import { Magic } from "@magic-sdk/admin";
-import { Magic } from "magic-sdk";
+import { Magic } from "@magic-sdk/admin";
 
-const magic =
-  typeof window !== "undefined" &&
-  new Magic(process.env.NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY || "a");
+const magic = new Magic(process.env.MAGIC_SECRET_KEY);
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   callbacks: {
     jwt({ token, user }) {
-      user && (token.user = user);
+      if (user) {
+        token.email = user.email;
+      }
+      // user && (token.user = user);
       return token;
     },
     session({ session, user }) {
-      session = {
-        ...session,
-        user: {
-          // id: user.id,
-          ...session.user,
-        },
-      };
+      try {
+        session.user.email = user.email;
+      } catch (error) {
+        console.log(error);
+      }
       return session;
     },
   },
@@ -44,28 +42,10 @@ export const authOptions: NextAuthOptions = {
         didToken: { label: "DID Token", type: "text" },
       },
       async authorize(credentials, req) {
-        const didToken = credentials?.didToken;
-
-        const res = await fetch("http://localhost:3000/api/login", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${didToken || ""}`,
-          },
-        });
-
-        if (res.status === 200) {
-          if (!magic) return null;
-          const userMetadata = await magic?.user?.getMetadata();
-          const user = {
-            id: "jfshgad",
-            userName: "TestUser",
-            email: userMetadata.email,
-          };
-          return user;
-        } else {
-          return null;
-        }
+        const didToken = credentials?.didToken || "";
+        magic.token.validate(didToken);
+        const metadata = await magic.users.getMetadataByToken(didToken);
+        return { ...metadata, id: "kjhgfghjk" };
       },
     }),
   ],
